@@ -68,13 +68,9 @@ func TestListAllRepositories_ContextCancellation(t *testing.T) {
 		count := atomic.AddInt32(&requestCount, 1)
 		page := r.URL.Query().Get("page")
 
-		// Cancel context after the first page is retrieved
-		if count == 1 {
-			cancel()
+		if count == 2 {
+			time.Sleep(200 * time.Millisecond)
 		}
-
-		// Add a short delay to simulate network latency and allow context cancellation to propagate
-		time.Sleep(50 * time.Millisecond)
 
 		var repos []*Repository
 		var linkHeader string
@@ -102,6 +98,11 @@ func TestListAllRepositories_ContextCancellation(t *testing.T) {
 
 	client := NewClient(server.URL, nil)
 
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
 	repos, err := client.ListAllRepositories(ctx, "test-org", &ListOptions{PerPage: 1})
 	if err == nil {
 		t.Fatal("expected error due to context cancellation, got nil")
@@ -110,14 +111,12 @@ func TestListAllRepositories_ContextCancellation(t *testing.T) {
 		t.Errorf("expected context.Canceled error, got %v", err)
 	}
 
-	// The first request is made, then context is cancelled.
-	// The loop checks ctx.Err() before making the second request, so only 1 request should be made.
-	if count := atomic.LoadInt32(&requestCount); count != 1 {
-		t.Errorf("expected exactly 1 request to be made, got %d", count)
+	if count := atomic.LoadInt32(&requestCount); count != 2 {
+		t.Errorf("expected 2 requests to be made before cancellation stopped it, got %d", count)
 	}
 
-	// We should still get the accumulated results up to the cancellation point
 	if len(repos) != 1 {
 		t.Errorf("expected 1 repository (accumulated before cancellation), got %d", len(repos))
 	}
 }
+

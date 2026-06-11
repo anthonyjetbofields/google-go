@@ -128,6 +128,9 @@ func (c *Client) ListAllRepositories(ctx context.Context, org string, opts *List
 
 		repos, resp, err := c.ListRepositories(ctx, org, opts)
 		if err != nil {
+			if ctx.Err() != nil {
+				return allRepos, ctx.Err()
+			}
 			return allRepos, err
 		}
 		allRepos = append(allRepos, repos...)
